@@ -1,6 +1,7 @@
 const prisma = require('../src/config/prisma');
-const { app, request, loginAs } = require('./helpers');
+const { app, request, loginAs, resetDatabase } = require('./helpers');
 
+beforeAll(() => resetDatabase());
 afterAll(() => prisma.$disconnect());
 
 describe('Authentication', () => {

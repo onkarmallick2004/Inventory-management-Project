@@ -28,6 +28,8 @@ tags:
   - name: Parts
   - name: Jobs
   - name: Requests
+  - name: Alerts
+  - name: Notifications
   - name: Public
     description: No login needed. Used by the machine QR landing page.
 
@@ -320,6 +322,46 @@ paths:
       summary: QR code PNG linking to the public machine page
       responses: { '200': { description: PNG image, content: { image/png: {} } } }
 
+  /machines/{id}/history:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get:
+      tags: [Machines]
+      summary: Full service timeline for one machine (jobs, parts used, costs)
+      responses:
+        '200':
+          description: Machine, summary and timeline (newest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  machine: { $ref: '#/components/schemas/Machine' }
+                  summary:
+                    type: object
+                    properties:
+                      totalJobs: { type: integer }
+                      closedJobs: { type: integer }
+                      breakdowns: { type: integer }
+                      totalPartsCost: { type: number }
+                      lastServiceDate: { type: string, format: date-time, nullable: true }
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        jobId: { type: integer }
+                        date: { type: string, format: date-time }
+                        type: { type: string }
+                        status: { type: string }
+                        technician: { type: string }
+                        notes: { type: string }
+                        partsCost: { type: number }
+                        parts:
+                          type: array
+                          items:
+                            type: object
+                            properties: { partNumber: { type: string }, name: { type: string }, quantity: { type: integer }, unitPrice: { type: number }, lineTotal: { type: number } }
+
   /parts:
     get:
       tags: [Parts]
@@ -395,6 +437,32 @@ paths:
         required: true
         content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [OPEN, IN_PROGRESS] }, notes: { type: string } } } } }
       responses: { '200': { description: Updated } }
+  /jobs/{id}/close:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    post:
+      tags: [Jobs]
+      summary: Close a job (Technician on own job, Admin)
+      description: |
+        In one database transaction: checks stock for every part used, deducts it,
+        logs stock movements, marks the job CLOSED, moves the machine's next service
+        due date (ROUTINE jobs only) and resolves the linked service request.
+        If any part is short, nothing changes and 409 INSUFFICIENT_STOCK is returned
+        with the short parts in `details`.
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { notes: { type: string } } } } }
+      responses:
+        '200':
+          description: Closed job, new due date, stock after, and any parts that are now low
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job: { type: object }
+                  nextServiceDue: { type: string, format: date-time }
+                  stockAfter: { type: array, items: { type: object } }
+                  lowStockParts: { type: array, items: { type: object } }
+        '409': { $ref: '#/components/responses/Error' }
   /jobs/{id}/parts:
     parameters: [{ $ref: '#/components/parameters/id' }]
     post:
@@ -454,6 +522,38 @@ paths:
                 type: { type: string, enum: [INSTALLATION, ROUTINE, BREAKDOWN], default: BREAKDOWN }
                 notes: { type: string }
       responses: { '201': { description: Request with its new job }, '409': { $ref: '#/components/responses/Error' } }
+
+  /alerts/low-stock:
+    get:
+      tags: [Alerts]
+      summary: Parts at or below their minimum level (Admin, Technician)
+      responses: { '200': { description: '{ count, data: [part + shortBy] }' } }
+  /alerts/upcoming:
+    get:
+      tags: [Alerts]
+      summary: Service due soon (incl. overdue) and AMC / warranty ending soon (Admin, Technician)
+      parameters:
+        - { name: serviceDays, in: query, schema: { type: integer, default: 15 } }
+        - { name: coverDays, in: query, schema: { type: integer, default: 30 } }
+      responses: { '200': { description: '{ serviceDue: [], amcExpiring: [], warrantyExpiring: [] } with daysLeft on each machine' } }
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications (customers see only their machines')
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - { name: unread, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: type, in: query, schema: { type: string, enum: [SERVICE_DUE, AMC_EXPIRING, WARRANTY_EXPIRING, LOW_STOCK] } }
+      responses: { '200': { description: Paged notifications } }
+  /notifications/{id}/read:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Notifications], summary: Mark as read, responses: { '200': { description: Updated } } }
+  /admin/run-reminders:
+    post:
+      tags: [Notifications]
+      summary: Run the daily reminder job now (Admin). Safe to run repeatedly; no duplicates.
+      responses: { '200': { description: 'Counts per notification type and emails sent' } }
 
   /public/machines/{qrToken}:
     parameters: [{ name: qrToken, in: path, required: true, schema: { type: string } }]

@@ -1,7 +1,7 @@
 const router = require('express').Router();
 const { authenticate, requireRole } = require('../../middleware/auth');
 const validate = require('../../middleware/validate');
-const { jobBody, jobUpdateBody, statusBody, partUsedBody, jobListQuery } = require('./jobs.schema');
+const { jobBody, jobUpdateBody, statusBody, closeBody, partUsedBody, jobListQuery } = require('./jobs.schema');
 const controller = require('./jobs.controller');
 
 router.use(authenticate);
@@ -18,6 +18,7 @@ router.delete('/:id', requireRole('ADMIN'), controller.remove);
 // Technicians (on their own jobs) and admins do the field work.
 const fieldRoles = requireRole('ADMIN', 'TECHNICIAN');
 router.patch('/:id/status', fieldRoles, validate({ body: statusBody }), controller.updateStatus);
+router.post('/:id/close', fieldRoles, validate({ body: closeBody }), controller.close);
 router.post('/:id/parts', fieldRoles, validate({ body: partUsedBody }), controller.addPart);
 router.delete('/:id/parts/:partUsedId', fieldRoles, controller.removePart);
 

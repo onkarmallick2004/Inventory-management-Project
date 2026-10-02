@@ -33,6 +33,9 @@ app.use('/api/machines', require('./modules/machines/machines.routes'));
 app.use('/api/parts', require('./modules/parts/parts.routes'));
 app.use('/api/jobs', require('./modules/jobs/jobs.routes'));
 app.use('/api/requests', require('./modules/requests/requests.routes'));
+app.use('/api/alerts', require('./modules/alerts/alerts.routes'));
+app.use('/api/notifications', require('./modules/notifications/notifications.routes'));
+app.use('/api/admin', require('./modules/admin/admin.routes'));
 app.use('/api/public', require('./modules/public/public.routes'));
 
 app.use(notFoundRoute);

@@ -299,7 +299,7 @@ async function main() {
   for (const m of machineRows) {
     const base = lastRoutine.get(m.id) || m.installDate;
     let next = new Date(base.getTime() + m.serviceIntervalDays * DAY);
-    if (next < daysFromToday(-60)) next = daysFromToday(randInt(-20, 40)); // keep overdue dates believable
+    if (next < daysFromToday(-30)) next = daysFromToday(randInt(16, 90)); // keep long-overdue dates believable
     await prisma.machine.update({ where: { id: m.id }, data: { nextServiceDue: next } });
   }
 

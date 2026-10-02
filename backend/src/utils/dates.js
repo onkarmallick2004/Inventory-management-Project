@@ -24,4 +24,12 @@ function coverageStatus(endDate, today = new Date(), soonDays = 30) {
   return 'ACTIVE';
 }
 
-module.exports = { DAY_MS, addDays, daysUntil, coverageStatus };
+// Midnight at the start of the given day (local time). Used so that two reminders
+// for the same day compare as equal.
+function startOfDay(date = new Date()) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+module.exports = { DAY_MS, addDays, daysUntil, coverageStatus, startOfDay };

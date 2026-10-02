@@ -1,3 +1,4 @@
+const { execSync } = require('child_process');
 const request = require('supertest');
 const app = require('../src/app');
 
@@ -19,4 +20,9 @@ async function loginAs(email) {
   };
 }
 
-module.exports = { app, request, loginAs, PASSWORD };
+// Reloads the seed data so each test file starts from the same known state.
+function resetDatabase() {
+  execSync('node prisma/seed.js', { env: process.env, stdio: 'ignore' });
+}
+
+module.exports = { app, request, loginAs, resetDatabase, PASSWORD };

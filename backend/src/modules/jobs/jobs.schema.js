@@ -11,13 +11,17 @@ const jobBody = z.object({
 });
 
 // Status cannot be set to CLOSED here: closing goes through POST /jobs/:id/close
-// (Phase 2) so stock deduction and due-date updates always happen.
+// so stock deduction and due-date updates always happen.
 const openStatuses = JOB_STATUSES.filter((s) => s !== 'CLOSED');
 
 const jobUpdateBody = jobBody.partial().extend({ status: z.enum(openStatuses).optional() });
 
 const statusBody = z.object({
   status: z.enum(openStatuses, { message: 'Use POST /api/jobs/:id/close to close a job' }),
+  notes: z.string().trim().optional(),
+});
+
+const closeBody = z.object({
   notes: z.string().trim().optional(),
 });
 
@@ -35,4 +39,4 @@ const jobListQuery = listQuery.extend({
   to: z.coerce.date().optional(), // scheduledDate <= to
 });
 
-module.exports = { jobBody, jobUpdateBody, statusBody, partUsedBody, jobListQuery };
+module.exports = { jobBody, jobUpdateBody, statusBody, closeBody, partUsedBody, jobListQuery };

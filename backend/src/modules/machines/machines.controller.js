@@ -105,3 +105,56 @@ async function qrCode(req, res) {
 }
 
 module.exports = { list, getOne, create, update, remove, qrCode, withStatus, findVisibleMachine };
+
+// GET /api/machines/:id/history
+// Full service timeline for one machine: every job (newest first) with the parts used and their cost.
+async function history(req, res) {
+  const machine = await findVisibleMachine(parseId(req.params.id), req.user, {
+    product: { select: { modelName: true, name: true, category: true } },
+    customer: { select: { id: true, companyName: true } },
+    jobs: {
+      orderBy: { scheduledDate: 'desc' },
+      include: {
+        technician: { select: { id: true, name: true } },
+        partsUsed: { include: { part: { select: { partNumber: true, name: true, unitPrice: true } } } },
+        serviceRequest: { select: { id: true, description: true, createdAt: true } },
+      },
+    },
+  });
+
+  const timeline = machine.jobs.map((job) => {
+    const parts = job.partsUsed.map((pu) => ({
+      partNumber: pu.part.partNumber,
+      name: pu.part.name,
+      quantity: pu.quantity,
+      unitPrice: pu.part.unitPrice,
+      lineTotal: pu.quantity * pu.part.unitPrice,
+    }));
+    return {
+      jobId: job.id,
+      date: job.closedDate || job.scheduledDate,
+      type: job.type,
+      status: job.status,
+      technician: job.technician?.name || null,
+      notes: job.notes,
+      request: job.serviceRequest,
+      parts,
+      partsCost: parts.reduce((sum, p) => sum + p.lineTotal, 0),
+    };
+  });
+
+  const { jobs, ...machineInfo } = machine;
+  res.json({
+    machine: withStatus(machineInfo),
+    summary: {
+      totalJobs: timeline.length,
+      closedJobs: timeline.filter((t) => t.status === 'CLOSED').length,
+      breakdowns: timeline.filter((t) => t.type === 'BREAKDOWN').length,
+      totalPartsCost: timeline.reduce((sum, t) => sum + t.partsCost, 0),
+      lastServiceDate: timeline.find((t) => t.status === 'CLOSED')?.date || null,
+    },
+    timeline,
+  });
+}
+
+module.exports.history = history;

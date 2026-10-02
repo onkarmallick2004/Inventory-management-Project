@@ -10,6 +10,7 @@ router.use(authenticate);
 router.get('/', validate({ query: machineListQuery }), controller.list);
 router.get('/:id', controller.getOne);
 router.get('/:id/qr', controller.qrCode);
+router.get('/:id/history', controller.history);
 
 router.post('/', requireRole('ADMIN'), validate({ body: machineBody }), controller.create);
 router.put('/:id', requireRole('ADMIN'), validate({ body: machineUpdateBody }), controller.update);

@@ -1,11 +1,12 @@
 const prisma = require('../src/config/prisma');
-const { app, request, loginAs } = require('./helpers');
+const { app, request, loginAs, resetDatabase } = require('./helpers');
 
 let admin;
 let tech;
 let customer;
 
 beforeAll(async () => {
+  resetDatabase();
   admin = await loginAs('admin@demo.local');
   tech = await loginAs('ravi@demo.local');
   customer = await loginAs('shree@demo.local');

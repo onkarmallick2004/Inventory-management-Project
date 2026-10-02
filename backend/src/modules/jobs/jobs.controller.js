@@ -1,6 +1,7 @@
 const prisma = require('../../config/prisma');
 const ApiError = require('../../utils/ApiError');
 const { parseId } = require('../../utils/id');
+const { closeJob } = require('../../services/stockService');
 const { pageArgs, sortArgs, contains, paged } = require('../../utils/pagination');
 
 const jobInclude = {
@@ -115,7 +116,7 @@ async function remove(req, res) {
 
 // POST /api/jobs/:id/parts  { partId, quantity }
 // Records a part used on the job. Adding the same part again replaces its quantity.
-// Stock is NOT deducted here; that happens when the job is closed (Phase 2).
+// Stock is NOT deducted here; that happens when the job is closed.
 async function addPart(req, res) {
   const jobId = parseId(req.params.id);
   assertNotClosed(await findVisibleJob(jobId, req.user));
@@ -141,4 +142,14 @@ async function removePart(req, res) {
   res.json(await findVisibleJob(jobId, req.user));
 }
 
-module.exports = { list, getOne, create, update, updateStatus, remove, addPart, removePart, jobInclude };
+// POST /api/jobs/:id/close  { notes }
+// Deducts parts from stock and closes the job in one transaction (see services/stockService.js).
+// Responds 409 INSUFFICIENT_STOCK, listing the short parts, if stock is not enough.
+async function close(req, res) {
+  const id = parseId(req.params.id);
+  await findVisibleJob(id, req.user); // technicians can only close their own jobs
+  const result = await closeJob(id, { userId: req.user.id, notes: req.valid.body.notes });
+  res.json({ ...result, job: await findVisibleJob(id, req.user) });
+}
+
+module.exports = { list, getOne, create, update, updateStatus, close, remove, addPart, removePart, jobInclude };

@@ -536,6 +536,11 @@ paths:
         - { name: serviceDays, in: query, schema: { type: integer, default: 15 } }
         - { name: coverDays, in: query, schema: { type: integer, default: 30 } }
       responses: { '200': { description: '{ serviceDue: [], amcExpiring: [], warrantyExpiring: [] } with daysLeft on each machine' } }
+  /dashboard/summary:
+    get:
+      tags: [Alerts]
+      summary: Admin dashboard data (counts, jobs closed per month by type, top alerts)
+      responses: { '200': { description: Dashboard summary } }
   /notifications:
     get:
       tags: [Notifications]

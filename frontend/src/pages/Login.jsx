@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { homeFor, useAuth } from '../auth/AuthContext';
 import { Logo } from '../layouts/AppLayout';
 import { Button, ErrorBox, Field, Input } from '../components/ui';
@@ -50,6 +50,9 @@ export default function Login() {
             {busy ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
+        <p className="mt-5 border-t border-slate-100 pt-4 text-center text-sm text-slate-500">
+          Looking for a new machine? <Link to="/selector" className="font-medium text-brand-700">Try the product selector</Link>
+        </p>
       </div>
     </div>
   );

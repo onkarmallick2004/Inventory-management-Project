@@ -12,11 +12,13 @@ const NAV = {
     { to: '/admin/machines', text: 'Machines' },
     { to: '/admin/parts', text: 'Parts inventory' },
     { to: '/admin/customers', text: 'Customers' },
+    { to: '/selector', text: 'Product selector' },
   ],
   TECHNICIAN: [{ to: '/tech', text: 'My jobs', end: true }],
   CUSTOMER: [
     { to: '/portal', text: 'My machines', end: true },
     { to: '/portal/requests', text: 'My requests' },
+    { to: '/selector', text: 'Product selector' },
   ],
 };
 

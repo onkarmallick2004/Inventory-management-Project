@@ -7,6 +7,7 @@ import { Loader } from './components/ui';
 
 import Login from './pages/Login';
 import QrLanding from './pages/public/QrLanding';
+import ProductSelector from './pages/public/ProductSelector';
 
 import Dashboard from './pages/admin/Dashboard';
 import Machines from './pages/admin/Machines';
@@ -34,6 +35,7 @@ export default function App() {
       {/* Public pages: can be linked from the marketing website */}
       <Route path="/login" element={<Login />} />
       <Route path="/m/:token" element={<QrLanding />} />
+      <Route path="/selector" element={<ProductSelector />} />
 
       <Route element={<ProtectedRoute roles={['ADMIN']} />}>
         <Route element={<AppLayout />}>

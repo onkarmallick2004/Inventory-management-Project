@@ -1,0 +1,214 @@
+// =============================================================
+// Prisma schema: Service & Spare Parts Management System
+// -------------------------------------------------------------
+// - Local dev uses SQLite. docker-compose switches the provider
+//   line to "postgresql" (see scripts/use-postgres.js).
+// - Status / type / role columns are plain strings. The allowed
+//   values live in src/config/constants.js and are checked by the
+//   Zod validators, so the same schema works on SQLite and Postgres.
+// =============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Anyone who can log in. CUSTOMER users are linked to a Customer company.
+model User {
+  id           Int      @id @default(autoincrement())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         String // ADMIN | TECHNICIAN | CUSTOMER
+  phone        String?
+  isActive     Boolean  @default(true)
+  customerId   Int?
+  customer     Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  assignedJobs    ServiceJob[]     @relation("TechnicianJobs")
+  raisedRequests  ServiceRequest[] @relation("RaisedRequests")
+  stockMovements  StockMovement[]
+
+  @@index([role])
+}
+
+// A client company that owns machines.
+model Customer {
+  id            Int      @id @default(autoincrement())
+  companyName   String
+  contactPerson String
+  email         String   @unique
+  phone         String
+  address       String?
+  city          String?
+  gstNumber     String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  machines Machine[]
+  users    User[]
+  requests ServiceRequest[]
+}
+
+// Catalog of compressors and vacuum pumps the company sells.
+model Product {
+  id           Int      @id @default(autoincrement())
+  modelName    String   @unique
+  name         String
+  category     String // AIR_COMPRESSOR | VACUUM_PUMP
+  type         String // SCREW | PISTON | ROTARY_VANE | SCROLL | LIQUID_RING
+  airflowCfm   Float
+  airflowLpm   Float
+  pressureBar  Float // max pressure (compressors) or ultimate vacuum in mbar-abs converted to bar (pumps)
+  powerKw      Float
+  phase        String // SINGLE | THREE
+  applications String // comma-separated tags, e.g. "food,pharma,general"
+  price        Float
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  machines        Machine[]
+  compatibleParts Part[] // implicit many-to-many: which parts fit this model
+}
+
+// One physical unit installed at a customer site.
+model Machine {
+  id                  Int       @id @default(autoincrement())
+  serialNumber        String    @unique
+  productId           Int
+  product             Product   @relation(fields: [productId], references: [id])
+  customerId          Int
+  customer            Customer  @relation(fields: [customerId], references: [id])
+  location            String?
+  installDate         DateTime
+  warrantyEnd         DateTime?
+  amcStart            DateTime?
+  amcEnd              DateTime?
+  serviceIntervalDays Int       @default(90)
+  nextServiceDue      DateTime?
+  qrToken             String    @unique // random token used in the public QR URL
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  jobs          ServiceJob[]
+  requests      ServiceRequest[]
+  notifications Notification[]
+
+  @@index([customerId])
+  @@index([nextServiceDue])
+  @@index([amcEnd])
+}
+
+model ServiceJob {
+  id               Int             @id @default(autoincrement())
+  machineId        Int
+  machine          Machine         @relation(fields: [machineId], references: [id])
+  technicianId     Int?
+  technician       User?           @relation("TechnicianJobs", fields: [technicianId], references: [id], onDelete: SetNull)
+  serviceRequestId Int?            @unique
+  serviceRequest   ServiceRequest? @relation(fields: [serviceRequestId], references: [id], onDelete: SetNull)
+  type             String // INSTALLATION | ROUTINE | BREAKDOWN
+  status           String          @default("OPEN") // OPEN | IN_PROGRESS | CLOSED
+  scheduledDate    DateTime
+  notes            String?
+  closedDate       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  partsUsed      PartUsed[]
+  stockMovements StockMovement[]
+
+  @@index([status])
+  @@index([technicianId])
+  @@index([machineId])
+}
+
+model Part {
+  id           Int      @id @default(autoincrement())
+  partNumber   String   @unique
+  name         String
+  stockQty     Int      @default(0) // never negative: enforced in the service layer inside a transaction
+  minimumLevel Int      @default(0)
+  unitPrice    Float
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  compatibleProducts Product[]
+  usages             PartUsed[]
+  stockMovements     StockMovement[]
+  notifications      Notification[]
+}
+
+// Parts consumed on a job. Stock is deducted only when the job is closed.
+model PartUsed {
+  id       Int        @id @default(autoincrement())
+  jobId    Int
+  job      ServiceJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  partId   Int
+  part     Part       @relation(fields: [partId], references: [id])
+  quantity Int
+
+  @@unique([jobId, partId])
+}
+
+// Raised by a customer (portal or public QR page).
+model ServiceRequest {
+  id           Int         @id @default(autoincrement())
+  machineId    Int
+  machine      Machine     @relation(fields: [machineId], references: [id])
+  customerId   Int
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  raisedById   Int?
+  raisedBy     User?       @relation("RaisedRequests", fields: [raisedById], references: [id], onDelete: SetNull)
+  description  String
+  contactName  String?
+  contactPhone String?
+  status       String      @default("NEW") // NEW | ASSIGNED | RESOLVED | CANCELLED
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  job          ServiceJob?
+
+  @@index([status])
+}
+
+// Created by the daily reminder job (Phase 2) and low-stock checks.
+model Notification {
+  id        Int      @id @default(autoincrement())
+  type      String // SERVICE_DUE | AMC_EXPIRING | WARRANTY_EXPIRING | LOW_STOCK
+  machineId Int?
+  machine   Machine? @relation(fields: [machineId], references: [id], onDelete: Cascade)
+  partId    Int?
+  part      Part?    @relation(fields: [partId], references: [id], onDelete: Cascade)
+  message   String
+  dueDate   DateTime?
+  emailSent Boolean  @default(false)
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // stops the daily job creating the same reminder twice
+  @@unique([type, machineId, dueDate])
+}
+
+// Audit trail for every stock change (restock, job consumption, adjustment).
+model StockMovement {
+  id        Int         @id @default(autoincrement())
+  partId    Int
+  part      Part        @relation(fields: [partId], references: [id], onDelete: Cascade)
+  change    Int // positive = stock in, negative = stock out
+  reason    String // RESTOCK | JOB_CONSUMPTION | ADJUSTMENT
+  note      String?
+  jobId     Int?
+  job       ServiceJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  userId    Int?
+  user      User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  createdAt DateTime    @default(now())
+
+  @@index([partId])
+}

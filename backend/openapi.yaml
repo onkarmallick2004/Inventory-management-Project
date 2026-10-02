@@ -1,0 +1,579 @@
+openapi: 3.0.3
+info:
+  title: Service & Spare Parts Management API
+  version: 1.0.0
+  description: |
+    REST API for managing customers, machines (air compressors and vacuum pumps),
+    spare parts, service jobs and service requests.
+
+    **Auth:** call `POST /auth/login`, then click "Authorize" and paste the token.
+
+    **Roles:** ADMIN (everything), TECHNICIAN (own jobs, parts lookup), CUSTOMER (own machines and requests).
+
+    **Lists** accept `page`, `limit` (max 100), `search` and `sort` (e.g. `createdAt:desc`) and return
+    `{ data: [...], meta: { page, limit, total, totalPages } }`.
+
+    **Errors** always look like `{ "error": { "code": "NOT_FOUND", "message": "...", "details": [...] } }`.
+servers:
+  - url: /api
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Auth
+  - name: Users
+  - name: Customers
+  - name: Products
+  - name: Machines
+  - name: Parts
+  - name: Jobs
+  - name: Requests
+  - name: Alerts
+  - name: Notifications
+  - name: Public
+    description: No login needed. Used by the machine QR landing page.
+
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, bearerFormat: JWT }
+
+  parameters:
+    id: { name: id, in: path, required: true, schema: { type: integer } }
+    page: { name: page, in: query, schema: { type: integer, default: 1 } }
+    limit: { name: limit, in: query, schema: { type: integer, default: 20, maximum: 100 } }
+    search: { name: search, in: query, schema: { type: string } }
+    sort: { name: sort, in: query, schema: { type: string, example: 'createdAt:desc' } }
+
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NoContent: { description: Deleted }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, example: BAD_REQUEST }
+            message: { type: string }
+            details:
+              type: array
+              items: { type: object, properties: { field: { type: string }, message: { type: string } } }
+    Meta:
+      type: object
+      properties: { page: { type: integer }, limit: { type: integer }, total: { type: integer }, totalPages: { type: integer } }
+
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, example: admin@demo.local }
+        password: { type: string, example: Demo@12345 }
+    RegisterInput:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name: { type: string }
+        email: { type: string }
+        password: { type: string, minLength: 8 }
+        role: { type: string, enum: [ADMIN, TECHNICIAN, CUSTOMER] }
+        phone: { type: string }
+        customerId: { type: integer, description: Required when role is CUSTOMER }
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        email: { type: string }
+        role: { type: string }
+        phone: { type: string, nullable: true }
+        isActive: { type: boolean }
+        customerId: { type: integer, nullable: true }
+
+    CustomerInput:
+      type: object
+      required: [companyName, contactPerson, email, phone]
+      properties:
+        companyName: { type: string }
+        contactPerson: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        address: { type: string }
+        city: { type: string }
+        gstNumber: { type: string }
+
+    ProductInput:
+      type: object
+      required: [modelName, name, category, type, airflowCfm, airflowLpm, pressureBar, powerKw, phase, applications, price]
+      properties:
+        modelName: { type: string, example: AC-S11 }
+        name: { type: string }
+        category: { type: string, enum: [AIR_COMPRESSOR, VACUUM_PUMP] }
+        type: { type: string, enum: [SCREW, PISTON, ROTARY_VANE, SCROLL, LIQUID_RING] }
+        airflowCfm: { type: number }
+        airflowLpm: { type: number }
+        pressureBar: { type: number }
+        powerKw: { type: number }
+        phase: { type: string, enum: [SINGLE, THREE] }
+        applications: { type: string, example: 'food,pharma' }
+        price: { type: number }
+        description: { type: string }
+
+    MachineInput:
+      type: object
+      required: [serialNumber, productId, customerId, installDate]
+      properties:
+        serialNumber: { type: string }
+        productId: { type: integer }
+        customerId: { type: integer }
+        location: { type: string }
+        installDate: { type: string, format: date }
+        warrantyEnd: { type: string, format: date }
+        amcStart: { type: string, format: date }
+        amcEnd: { type: string, format: date }
+        serviceIntervalDays: { type: integer, default: 90 }
+        nextServiceDue: { type: string, format: date, description: Defaults to installDate + serviceIntervalDays }
+    Machine:
+      allOf:
+        - $ref: '#/components/schemas/MachineInput'
+        - type: object
+          properties:
+            id: { type: integer }
+            qrToken: { type: string }
+            warrantyStatus: { type: string, enum: [NONE, ACTIVE, EXPIRING_SOON, EXPIRED] }
+            amcStatus: { type: string, enum: [NONE, ACTIVE, EXPIRING_SOON, EXPIRED] }
+
+    PartInput:
+      type: object
+      required: [partNumber, name, minimumLevel, unitPrice]
+      properties:
+        partNumber: { type: string }
+        name: { type: string }
+        stockQty: { type: integer, description: Only on create. Later changes go through restock or job closing. }
+        minimumLevel: { type: integer }
+        unitPrice: { type: number }
+        compatibleProductIds: { type: array, items: { type: integer } }
+
+    JobInput:
+      type: object
+      required: [machineId, type, scheduledDate]
+      properties:
+        machineId: { type: integer }
+        technicianId: { type: integer }
+        type: { type: string, enum: [INSTALLATION, ROUTINE, BREAKDOWN] }
+        scheduledDate: { type: string, format: date-time }
+        notes: { type: string }
+
+    RequestInput:
+      type: object
+      required: [machineId, description]
+      properties:
+        machineId: { type: integer }
+        description: { type: string, minLength: 10 }
+        contactName: { type: string }
+        contactPhone: { type: string }
+
+paths:
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Log in and get a JWT
+      security: []
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/LoginInput' } } } }
+      responses:
+        '200':
+          description: Token and user
+          content:
+            application/json:
+              schema: { type: object, properties: { token: { type: string }, user: { $ref: '#/components/schemas/User' } } }
+        '401': { $ref: '#/components/responses/Error' }
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Create a user account (Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RegisterInput' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Current user
+      responses: { '200': { description: Current user, content: { application/json: { schema: { $ref: '#/components/schemas/User' } } } } }
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List users (Admin)
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - { name: role, in: query, schema: { type: string, enum: [ADMIN, TECHNICIAN, CUSTOMER] } }
+      responses: { '200': { description: Paged users } }
+  /users/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Users], summary: Get user (Admin), responses: { '200': { description: User }, '404': { $ref: '#/components/responses/Error' } } }
+    put:
+      tags: [Users]
+      summary: Update name, phone, isActive or password (Admin)
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { name: { type: string }, phone: { type: string }, isActive: { type: boolean }, password: { type: string } } }
+      responses: { '200': { description: Updated } }
+
+  /customers:
+    get:
+      tags: [Customers]
+      summary: List customers (Admin, Technician)
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+      responses: { '200': { description: Paged customers } }
+    post:
+      tags: [Customers]
+      summary: Create customer (Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CustomerInput' } } } }
+      responses: { '201': { description: Created }, '400': { $ref: '#/components/responses/Error' } }
+  /customers/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Customers], summary: Get customer with machines, responses: { '200': { description: Customer } } }
+    put:
+      tags: [Customers]
+      summary: Update customer (Admin)
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/CustomerInput' } } } }
+      responses: { '200': { description: Updated } }
+    delete:
+      tags: [Customers]
+      summary: Delete customer (Admin). 409 if they still own machines.
+      responses: { '204': { $ref: '#/components/responses/NoContent' }, '409': { $ref: '#/components/responses/Error' } }
+
+  /products:
+    get:
+      tags: [Products]
+      summary: List catalog products (public)
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+        - { name: category, in: query, schema: { type: string, enum: [AIR_COMPRESSOR, VACUUM_PUMP] } }
+        - { name: type, in: query, schema: { type: string } }
+        - { name: phase, in: query, schema: { type: string, enum: [SINGLE, THREE] } }
+      responses: { '200': { description: Paged products } }
+    post:
+      tags: [Products]
+      summary: Create product (Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } } }
+      responses: { '201': { description: Created } }
+  /products/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Products], summary: Get product with compatible parts (public), security: [], responses: { '200': { description: Product } } }
+    put:
+      tags: [Products]
+      summary: Update product (Admin)
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/ProductInput' } } } }
+      responses: { '200': { description: Updated } }
+    delete: { tags: [Products], summary: Delete product (Admin), responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+
+  /machines:
+    get:
+      tags: [Machines]
+      summary: List machines (customers see only their own)
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+        - { name: customerId, in: query, schema: { type: integer } }
+        - { name: productId, in: query, schema: { type: integer } }
+        - { name: category, in: query, schema: { type: string, enum: [AIR_COMPRESSOR, VACUUM_PUMP] } }
+      responses: { '200': { description: Paged machines } }
+    post:
+      tags: [Machines]
+      summary: Register a machine (Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/MachineInput' } } } }
+      responses: { '201': { description: Created, content: { application/json: { schema: { $ref: '#/components/schemas/Machine' } } } } }
+  /machines/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Machines], summary: Get machine, responses: { '200': { description: Machine, content: { application/json: { schema: { $ref: '#/components/schemas/Machine' } } } } } }
+    put:
+      tags: [Machines]
+      summary: Update machine (Admin)
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/MachineInput' } } } }
+      responses: { '200': { description: Updated } }
+    delete: { tags: [Machines], summary: Delete machine (Admin). 409 if it has service history., responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /machines/{id}/qr:
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - { name: download, in: query, schema: { type: string }, description: Set to 1 to download as a file }
+    get:
+      tags: [Machines]
+      summary: QR code PNG linking to the public machine page
+      responses: { '200': { description: PNG image, content: { image/png: {} } } }
+
+  /machines/{id}/history:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get:
+      tags: [Machines]
+      summary: Full service timeline for one machine (jobs, parts used, costs)
+      responses:
+        '200':
+          description: Machine, summary and timeline (newest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  machine: { $ref: '#/components/schemas/Machine' }
+                  summary:
+                    type: object
+                    properties:
+                      totalJobs: { type: integer }
+                      closedJobs: { type: integer }
+                      breakdowns: { type: integer }
+                      totalPartsCost: { type: number }
+                      lastServiceDate: { type: string, format: date-time, nullable: true }
+                  timeline:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        jobId: { type: integer }
+                        date: { type: string, format: date-time }
+                        type: { type: string }
+                        status: { type: string }
+                        technician: { type: string }
+                        notes: { type: string }
+                        partsCost: { type: number }
+                        parts:
+                          type: array
+                          items:
+                            type: object
+                            properties: { partNumber: { type: string }, name: { type: string }, quantity: { type: integer }, unitPrice: { type: number }, lineTotal: { type: number } }
+
+  /parts:
+    get:
+      tags: [Parts]
+      summary: List parts (Admin, Technician)
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+        - { name: lowStock, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: productId, in: query, schema: { type: integer }, description: Only parts compatible with this product }
+      responses: { '200': { description: Paged parts, each with isLowStock } }
+    post:
+      tags: [Parts]
+      summary: Create part (Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/PartInput' } } } }
+      responses: { '201': { description: Created } }
+  /parts/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Parts], summary: Get part with recent stock movements, responses: { '200': { description: Part } } }
+    put:
+      tags: [Parts]
+      summary: Update part details (Admin). stockQty is not changed here.
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/PartInput' } } } }
+      responses: { '200': { description: Updated } }
+    delete: { tags: [Parts], summary: Delete part (Admin), responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /parts/{id}/restock:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    post:
+      tags: [Parts]
+      summary: Add stock (Admin). Logged as a RESTOCK stock movement.
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [quantity], properties: { quantity: { type: integer, minimum: 1 }, note: { type: string } } } } }
+      responses: { '200': { description: Updated part } }
+
+  /jobs:
+    get:
+      tags: [Jobs]
+      summary: List service jobs (technicians see their own, customers see their machines')
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - $ref: '#/components/parameters/sort'
+        - { name: status, in: query, schema: { type: string, enum: [OPEN, IN_PROGRESS, CLOSED] } }
+        - { name: type, in: query, schema: { type: string, enum: [INSTALLATION, ROUTINE, BREAKDOWN] } }
+        - { name: technicianId, in: query, schema: { type: integer } }
+        - { name: machineId, in: query, schema: { type: integer } }
+        - { name: from, in: query, schema: { type: string, format: date } }
+        - { name: to, in: query, schema: { type: string, format: date } }
+      responses: { '200': { description: Paged jobs } }
+    post:
+      tags: [Jobs]
+      summary: Schedule a job (Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/JobInput' } } } }
+      responses: { '201': { description: Created } }
+  /jobs/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Jobs], summary: Get job with parts used, responses: { '200': { description: Job } } }
+    put:
+      tags: [Jobs]
+      summary: Edit or reassign a job (Admin). Closed jobs cannot be edited.
+      requestBody: { content: { application/json: { schema: { $ref: '#/components/schemas/JobInput' } } } }
+      responses: { '200': { description: Updated }, '409': { $ref: '#/components/responses/Error' } }
+    delete: { tags: [Jobs], summary: Delete a job that is not closed (Admin), responses: { '204': { $ref: '#/components/responses/NoContent' } } }
+  /jobs/{id}/status:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch:
+      tags: [Jobs]
+      summary: Set status to OPEN or IN_PROGRESS and update notes (Technician on own job, Admin)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [OPEN, IN_PROGRESS] }, notes: { type: string } } } } }
+      responses: { '200': { description: Updated } }
+  /jobs/{id}/close:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    post:
+      tags: [Jobs]
+      summary: Close a job (Technician on own job, Admin)
+      description: |
+        In one database transaction: checks stock for every part used, deducts it,
+        logs stock movements, marks the job CLOSED, moves the machine's next service
+        due date (ROUTINE jobs only) and resolves the linked service request.
+        If any part is short, nothing changes and 409 INSUFFICIENT_STOCK is returned
+        with the short parts in `details`.
+      requestBody:
+        content: { application/json: { schema: { type: object, properties: { notes: { type: string } } } } }
+      responses:
+        '200':
+          description: Closed job, new due date, stock after, and any parts that are now low
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  job: { type: object }
+                  nextServiceDue: { type: string, format: date-time }
+                  stockAfter: { type: array, items: { type: object } }
+                  lowStockParts: { type: array, items: { type: object } }
+        '409': { $ref: '#/components/responses/Error' }
+  /jobs/{id}/parts:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    post:
+      tags: [Jobs]
+      summary: Record a part used on the job (stock is deducted when the job is closed)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [partId, quantity], properties: { partId: { type: integer }, quantity: { type: integer, minimum: 1 } } } } }
+      responses: { '201': { description: Job with parts } }
+  /jobs/{id}/parts/{partUsedId}:
+    parameters:
+      - $ref: '#/components/parameters/id'
+      - { name: partUsedId, in: path, required: true, schema: { type: integer } }
+    delete: { tags: [Jobs], summary: Remove a part entry from an open job, responses: { '200': { description: Job with parts } } }
+
+  /requests:
+    get:
+      tags: [Requests]
+      summary: List service requests (Admin; customers see their own)
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/search'
+        - { name: status, in: query, schema: { type: string, enum: [NEW, ASSIGNED, RESOLVED, CANCELLED] } }
+        - { name: machineId, in: query, schema: { type: integer } }
+      responses: { '200': { description: Paged requests } }
+    post:
+      tags: [Requests]
+      summary: Raise a service request (Customer for own machine, or Admin)
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/RequestInput' } } } }
+      responses: { '201': { description: Created } }
+  /requests/{id}:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    get: { tags: [Requests], summary: Get request, responses: { '200': { description: Request } } }
+    patch:
+      tags: [Requests]
+      summary: Change status (Admin any; Customer may only cancel a NEW request)
+      requestBody:
+        required: true
+        content: { application/json: { schema: { type: object, required: [status], properties: { status: { type: string, enum: [NEW, ASSIGNED, RESOLVED, CANCELLED] } } } } }
+      responses: { '200': { description: Updated } }
+  /requests/{id}/assign:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    post:
+      tags: [Requests]
+      summary: Assign a technician (Admin). Creates a service job and marks the request ASSIGNED.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [technicianId, scheduledDate]
+              properties:
+                technicianId: { type: integer }
+                scheduledDate: { type: string, format: date-time }
+                type: { type: string, enum: [INSTALLATION, ROUTINE, BREAKDOWN], default: BREAKDOWN }
+                notes: { type: string }
+      responses: { '201': { description: Request with its new job }, '409': { $ref: '#/components/responses/Error' } }
+
+  /alerts/low-stock:
+    get:
+      tags: [Alerts]
+      summary: Parts at or below their minimum level (Admin, Technician)
+      responses: { '200': { description: '{ count, data: [part + shortBy] }' } }
+  /alerts/upcoming:
+    get:
+      tags: [Alerts]
+      summary: Service due soon (incl. overdue) and AMC / warranty ending soon (Admin, Technician)
+      parameters:
+        - { name: serviceDays, in: query, schema: { type: integer, default: 15 } }
+        - { name: coverDays, in: query, schema: { type: integer, default: 30 } }
+      responses: { '200': { description: '{ serviceDue: [], amcExpiring: [], warrantyExpiring: [] } with daysLeft on each machine' } }
+  /notifications:
+    get:
+      tags: [Notifications]
+      summary: List notifications (customers see only their machines')
+      parameters:
+        - $ref: '#/components/parameters/page'
+        - $ref: '#/components/parameters/limit'
+        - { name: unread, in: query, schema: { type: string, enum: ['true', 'false'] } }
+        - { name: type, in: query, schema: { type: string, enum: [SERVICE_DUE, AMC_EXPIRING, WARRANTY_EXPIRING, LOW_STOCK] } }
+      responses: { '200': { description: Paged notifications } }
+  /notifications/{id}/read:
+    parameters: [{ $ref: '#/components/parameters/id' }]
+    patch: { tags: [Notifications], summary: Mark as read, responses: { '200': { description: Updated } } }
+  /admin/run-reminders:
+    post:
+      tags: [Notifications]
+      summary: Run the daily reminder job now (Admin). Safe to run repeatedly; no duplicates.
+      responses: { '200': { description: 'Counts per notification type and emails sent' } }
+
+  /public/machines/{qrToken}:
+    parameters: [{ name: qrToken, in: path, required: true, schema: { type: string } }]
+    get:
+      tags: [Public]
+      summary: Machine summary for the QR landing page (no customer data)
+      security: []
+      responses: { '200': { description: Machine model, warranty and AMC status }, '404': { $ref: '#/components/responses/Error' } }
+  /public/machines/{qrToken}/requests:
+    parameters: [{ name: qrToken, in: path, required: true, schema: { type: string } }]
+    post:
+      tags: [Public]
+      summary: Raise a service request from the QR page
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contactName, contactPhone, description]
+              properties: { contactName: { type: string }, contactPhone: { type: string }, description: { type: string } }
+      responses: { '201': { description: Request received } }

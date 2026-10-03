@@ -69,7 +69,7 @@ Roles: **A** = Admin, **T** = Technician, **C** = Customer, **P** = public (no l
 | POST | `/admin/run-reminders` | A | Run the daily reminder job now |
 | GET | `/dashboard/summary` | A | Dashboard numbers, jobs per month, top alerts |
 | POST | `/ml/product-selector` | P | Top 3 products with score and explanation |
-| GET | `/ml/parts-forecast?months=12` | A | Next-month forecast and suggested reorder per part |
+| GET | `/ml/parts-forecast?months=24` | A | Next-month forecast and suggested reorder per part |
 | GET | `/public/machines/:qrToken` | P | Machine summary for the QR page (no customer data) |
 | POST | `/public/machines/:qrToken/requests` | P | Raise a request from the QR page |
 

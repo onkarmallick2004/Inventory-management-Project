@@ -1,0 +1,52 @@
+# One command to run everything:   docker compose up --build
+#   App:        http://localhost:8080
+#   API docs:   http://localhost:4000/api/docs
+#   ML docs:    http://localhost:8000/docs
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: servicedesk
+      POSTGRES_USER: servicedesk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (copy .env.example)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U servicedesk -d servicedesk"]
+      interval: 3s
+      retries: 20
+
+  ml:
+    build: ./ml-service
+    ports:
+      - "8000:8000"
+
+  backend:
+    build: ./backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://servicedesk:${POSTGRES_PASSWORD}@db:5432/servicedesk
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env}
+      SEED_PASSWORD: ${SEED_PASSWORD:?Set SEED_PASSWORD in .env}
+      FRONTEND_URL: http://localhost:8080
+      ML_SERVICE_URL: http://ml:8000
+      REMINDER_TZ: Asia/Kolkata
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      MAIL_FROM: ${MAIL_FROM:-Service Desk <service@example.com>}
+    ports:
+      - "4000:4000"
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      - backend
+    ports:
+      - "8080:80"
+
+volumes:
+  pgdata:

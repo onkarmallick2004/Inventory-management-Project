@@ -10,6 +10,7 @@ const jobInclude = {
       id: true,
       serialNumber: true,
       location: true,
+      productId: true,
       product: { select: { modelName: true, name: true } },
       customer: { select: { id: true, companyName: true, phone: true } },
     },

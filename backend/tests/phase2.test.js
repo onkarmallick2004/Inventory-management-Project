@@ -225,3 +225,13 @@ describe('Machine history', () => {
     expect((await customer.get(`/api/machines/${other.id}/history`)).status).toBe(404);
   });
 });
+
+describe('Dashboard summary', () => {
+  test('returns counts and 12 months of job data for admins only', async () => {
+    const res = await admin.get('/api/dashboard/summary');
+    expect(res.status).toBe(200);
+    expect(res.body.jobsByMonth).toHaveLength(12);
+    expect(res.body.counts.lowStockParts).toBeGreaterThan(0);
+    expect((await tech.get('/api/dashboard/summary')).status).toBe(403);
+  });
+});

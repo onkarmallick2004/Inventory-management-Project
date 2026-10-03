@@ -36,6 +36,8 @@ app.use('/api/requests', require('./modules/requests/requests.routes'));
 app.use('/api/alerts', require('./modules/alerts/alerts.routes'));
 app.use('/api/notifications', require('./modules/notifications/notifications.routes'));
 app.use('/api/admin', require('./modules/admin/admin.routes'));
+app.use('/api/dashboard', require('./modules/dashboard/dashboard.routes'));
+app.use('/api/ml', require('./modules/ml/ml.routes'));
 app.use('/api/public', require('./modules/public/public.routes'));
 
 app.use(notFoundRoute);

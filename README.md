@@ -61,7 +61,7 @@ docker compose up --build
 | API docs (Swagger) | http://localhost:4000/api/docs |
 | ML service docs | http://localhost:8000/docs |
 
-The first start creates the tables and loads the demo data. To reset the demo data later:
+The first start creates the tables and loads the sample data. To reset it later:
 `docker compose exec backend node prisma/seed.js`.
 
 ### Option B: run the three parts locally (no Docker)
@@ -73,7 +73,7 @@ Needs Node.js 22+ and Python 3.11+. Uses SQLite, so no database server is requir
 cd backend
 npm install
 cp .env.example .env           # set JWT_SECRET
-npm run setup                  # create SQLite database + demo data
+npm run setup                  # create SQLite database + sample data
 npm run dev                    # http://localhost:4000
 
 # 2. ML service  (terminal 2)
@@ -141,9 +141,9 @@ embed them (in that case allow framing in the web server's headers).
 ## Limitations and future scope
 
 **Current limitations**
-- **Demo data, not company data.** The seed has 60 jobs over 18 months across 40 parts, so the parts
-  forecast has very little history and its numbers are small. Two to three years of real job cards would
-  make it far more useful (see [ml-service/README.md](ml-service/README.md)).
+- **Sample data.** The seed builds five years of history (120 customers, about 450 machines, about 6,300
+  service jobs, 153 parts) around published manufacturer specifications. See [docs/DATA.md](docs/DATA.md)
+  for the sources and the rules used.
 - **Product selector weights are expert estimates**, not learned from past sales.
 - **Supplier lead times and purchase orders are not modelled**; the reorder suggestion uses the minimum
   level as its safety buffer.

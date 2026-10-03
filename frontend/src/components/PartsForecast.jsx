@@ -7,7 +7,8 @@ export default function PartsForecast() {
   const { data, loading, error, reload } = useApi('/ml/parts-forecast');
   const [showAll, setShowAll] = useState(false);
   const rows = (data?.results || []).map((r) => ({ ...r, id: r.partId }));
-  const visible = showAll ? rows : rows.filter((r) => r.suggestedReorder > 0 || r.forecastNextMonth >= 0.5);
+  // By default only the parts that need ordering; the checkbox shows the full catalog.
+  const visible = showAll ? rows : rows.filter((r) => r.suggestedReorder > 0);
 
   const columns = [
     { key: 'part', header: 'Part', render: (r) => (<><p className="font-medium text-slate-900">{r.name}</p><p className="text-xs text-slate-500">{r.partNumber}</p></>) },

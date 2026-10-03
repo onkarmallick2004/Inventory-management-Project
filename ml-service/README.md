@@ -30,7 +30,7 @@ breakdown and a plain-language explanation.
 ## 2. Parts Demand Forecast (`app/forecast/`)
 
 `POST /forecast-parts` with units used per month for each part (the backend
-builds this from closed jobs for the last 12 complete months).
+builds this from closed jobs for the last 24 complete months by default, up to 60).
 
 For each part, three classic methods are tried:
 
@@ -47,15 +47,14 @@ so the forecast agrees with the low-stock alert.
 
 ## Honest limitations (where real company data would help)
 
-- **Demo data is sparse.** The seed has 60 jobs over 18 months spread across 40 parts,
-  so most parts were used only a few times and many months are zero. Forecasts are
-  therefore small and close to the average. With 2–3 years of real job cards the same
-  code would produce much more meaningful numbers, and seasonal effects (e.g. summer
-  overheating breakdowns) could be modelled.
+- **No seasonal method.** The seed history has a summer and monsoon peak in breakdowns
+  (see [docs/DATA.md](../docs/DATA.md)), but the three methods only follow level and
+  trend. A seasonal method (same month last year) could be added as a fourth option.
 - **Lead times are not modelled.** Real supplier lead times per part would let us
   compute a proper reorder point instead of using the minimum level as the buffer.
 - **The selector weights are expert guesses**, not learned. Records of which machine
   was actually sold for which enquiry (and whether the customer was happy) would let
   us tune the weights or train a ranking model.
-- **Catalog specs are simplified.** Real data sheets (FAD at several pressures, noise,
-  duty cycle, air quality class) would make matching more precise.
+- **One pressure variant per model.** The catalog lists each model at one working
+  pressure (8 bar for most screw compressors). Adding every pressure variant from the
+  data sheets would make matching more precise.

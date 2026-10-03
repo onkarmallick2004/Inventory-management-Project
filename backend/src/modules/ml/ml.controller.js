@@ -57,12 +57,12 @@ async function monthlyUsage(months) {
   };
 }
 
-// GET /api/ml/parts-forecast?months=12   (admin)
+// GET /api/ml/parts-forecast?months=24   (admin, 4 to 60 months of history)
 async function partsForecast(req, res) {
   const data = await monthlyUsage(req.valid.query.months);
   res.json(await callMl('/forecast-parts', data));
 }
 
-const forecastQuery = z.object({ months: z.coerce.number().int().min(4).max(36).default(12) });
+const forecastQuery = z.object({ months: z.coerce.number().int().min(4).max(60).default(24) });
 
 module.exports = { productSelector, partsForecast, selectorBody, forecastQuery, monthlyUsage };

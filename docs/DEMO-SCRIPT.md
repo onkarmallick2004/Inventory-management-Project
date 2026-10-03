@@ -40,9 +40,9 @@ App URL: http://localhost:8080 with Docker, http://localhost:5173 when running l
 ## 2. Admin assigns a technician (admin window)
 
 1. Log in as **admin@demo.local**. Walk through the dashboard: open jobs, new requests, services due this
-   week (two are overdue in red), low-stock parts, AMC ending soon, and the jobs-per-month chart.
-2. Note the **Low-stock parts** count (8) and that **Oil separator 11kW (SEP-S11)** is *not* in the list
-   yet (5 in stock, minimum 2).
+   week (the overdue ones are in red), low-stock parts, AMC ending soon, and the jobs-per-month chart.
+2. Note the **Low-stock parts** count (it depends on the date, because the history always ends today) and
+   that **Oil separator EG 11 (SEP-S11)** is *not* in the list yet (5 in stock, minimum 2).
 3. Go to **Service requests** → the new request → **Assign** → technician **Ravi Kumar**, today's date,
    type *Breakdown* → **Create job & assign**. The request moves to *Assigned*.
 
@@ -50,7 +50,7 @@ App URL: http://localhost:8080 with Docker, http://localhost:5173 when running l
 
 1. Sign out, log in as **ravi@demo.local**. *My jobs* lists the new job at Precision Plastics, scheduled today (below the job already in progress).
 2. Open it → **Start job** (status becomes *In progress*).
-3. **+ Add part** → the list only shows parts that fit an AC-S11 → choose **Oil separator 11kW (SEP-S11)**,
+3. **+ Add part** → the list only shows parts that fit an ELGi EG 11 → choose **Oil separator EG 11 (SEP-S11)**,
    quantity **3** → **Add**.
 4. *(Optional, to show the safety check)* change the quantity to **9** and try to close: the API refuses with
    "need 9, only 5 in stock" and nothing changes. Set it back to 3.
@@ -59,8 +59,8 @@ App URL: http://localhost:8080 with Docker, http://localhost:5173 when running l
 
 ## 4. Stock drops and the low-stock alert appears (admin window)
 
-1. Refresh the dashboard: **Low-stock parts** is now **9**, and *Oil separator 11kW* appears in the
-   Low stock list.
+1. Refresh the dashboard: **Low-stock parts** is one higher (the dashboard card lists the emptiest parts
+   first, so the separator may be further down the full list).
 2. **Parts inventory** → tick *Show low stock only*: SEP-S11 shows 2 / min 2 in red.
 3. If asked how stock changes are tracked: every change is a stock movement (opening stock, each job, each
    restock). `GET /api/parts/:id` in Swagger shows the last 20 movements for a part.
@@ -81,17 +81,18 @@ App URL: http://localhost:8080 with Docker, http://localhost:5173 when running l
 ## 6. Smart features
 
 1. **Product selector** (left menu, or `/selector`, which needs no login): *Air compressor*, 60 CFM,
-   7.5 bar, three-phase, application *Food*. The oil-free screw scores 100/100. Point at the score bars and
+   7.5 bar, three-phase, application *Food*. The **ELGi AB 15** oil-free screw scores 100/100. Point at the score bars and
    the explanation. Then change the power supply to *Single-phase* to show the three-phase machines
    dropping down with a "does not meet a must-have" badge.
-2. **Parts demand forecast** (bottom of the admin dashboard): for each part, the last 6 months of use,
-   next month's forecast, which method was chosen (the one with the lowest past error) and the suggested
-   reorder quantity. Be upfront: with only 60 demo jobs the numbers are small, which is why the README
-   lists where real company data would help.
+2. **Parts demand forecast** (bottom of the admin dashboard): the parts that need ordering, each with the
+   last 6 months of use, next month's forecast, which method was chosen (the one with the lowest past error
+   over 24 months) and the suggested reorder quantity. Tick *Show all parts* for the whole catalog. Filters
+   and oils for the most common screw compressors are the fast movers; point out the growth trend.
+   [DATA.md](DATA.md) explains where the catalog specs and the five-year history come from.
 
 ## 7. If you are asked "how do you know it works?"
 
-- `cd backend && npm test`: 72 tests (auth and roles, CRUD, job-close transaction and rollback, due dates,
-  reminders without duplicates, machine history, ML proxy).
+- `cd backend && npm test`: 75 tests (auth and roles, CRUD, job-close transaction and rollback, due dates,
+  reminders without duplicates, machine history, ML proxy, seed stock adds up).
 - `cd ml-service && pytest`: 17 tests for the selector and the forecast.
 - The same backend test suite also passes against PostgreSQL.

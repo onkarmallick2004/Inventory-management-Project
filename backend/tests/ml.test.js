@@ -60,7 +60,7 @@ describe('Parts forecast', () => {
   test('monthly usage covers 12 complete months and matches the database', async () => {
     const data = await monthlyUsage(12);
     expect(data.months).toHaveLength(12);
-    expect(data.parts).toHaveLength(40);
+    expect(data.parts).toHaveLength(153);
     for (const p of data.parts) expect(p.history).toHaveLength(12);
 
     const now = new Date();
@@ -73,6 +73,15 @@ describe('Parts forecast', () => {
     const total = data.parts.reduce((sum, p) => sum + p.history.reduce((a, b) => a + b, 0), 0);
     expect(total).toBe(agg._sum.quantity);
     expect(total).toBeGreaterThan(0);
+  });
+
+  test('uses 24 months of history by default and accepts up to 60', async () => {
+    const calls = fakeMl({ results: [] });
+    expect((await admin.get('/api/ml/parts-forecast')).status).toBe(200);
+    expect(calls[0].body.months).toHaveLength(24);
+    expect((await admin.get('/api/ml/parts-forecast?months=60')).status).toBe(200);
+    expect(calls[1].body.months).toHaveLength(60);
+    expect((await admin.get('/api/ml/parts-forecast?months=61')).status).toBe(400);
   });
 
   test('is admin-only and passes the history to the ML service', async () => {

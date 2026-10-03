@@ -15,10 +15,30 @@ afterAll(() => prisma.$disconnect());
 
 describe('Seed data', () => {
   test('has the expected volumes', async () => {
-    expect(await prisma.customer.count()).toBe(10);
-    expect(await prisma.machine.count()).toBe(25);
-    expect(await prisma.part.count()).toBe(40);
-    expect(await prisma.serviceJob.count({ where: { status: 'CLOSED' } })).toBe(60);
+    expect(await prisma.customer.count()).toBe(120);
+    expect(await prisma.product.count()).toBe(29);
+    expect(await prisma.part.count()).toBe(153);
+    // Machines and jobs depend on today's date (history is the last five years), so check a range.
+    expect(await prisma.machine.count()).toBeGreaterThan(350);
+    expect(await prisma.serviceJob.count({ where: { status: 'CLOSED' } })).toBeGreaterThan(4000);
+  });
+
+  test('stock movements add up to the stock on hand for every part', async () => {
+    const parts = await prisma.part.findMany({ select: { id: true, partNumber: true, stockQty: true } });
+    const sums = await prisma.stockMovement.groupBy({ by: ['partId'], _sum: { change: true } });
+    for (const part of parts) {
+      const sum = sums.find((s) => s.partId === part.id);
+      expect({ part: part.partNumber, qty: sum ? sum._sum.change : 0 }).toEqual({ part: part.partNumber, qty: part.stockQty });
+    }
+  });
+
+  test('keeps the records the demo script relies on', async () => {
+    const machine = await prisma.machine.findUnique({ where: { serialNumber: 'AC-S11-024098' }, include: { product: true, customer: true } });
+    expect(machine.product.modelName).toBe('ELGi EG 11');
+    expect(machine.customer.companyName).toBe('Precision Plastics Moulding');
+    const separator = await prisma.part.findUnique({ where: { partNumber: 'SEP-S11' }, include: { compatibleProducts: true } });
+    expect(separator).toEqual(expect.objectContaining({ stockQty: 5, minimumLevel: 2 }));
+    expect(separator.compatibleProducts.map((p) => p.modelName)).toContain('ELGi EG 11');
   });
 });
 
@@ -27,11 +47,11 @@ describe('Pagination, search and validation', () => {
     const res = await admin.get('/api/parts?page=2&limit=15');
     expect(res.status).toBe(200);
     expect(res.body.data).toHaveLength(15);
-    expect(res.body.meta).toEqual({ page: 2, limit: 15, total: 40, totalPages: 3 });
+    expect(res.body.meta).toEqual({ page: 2, limit: 15, total: 153, totalPages: 11 });
   });
 
   test('search filters results', async () => {
-    const res = await admin.get('/api/customers?search=pharma');
+    const res = await admin.get('/api/customers?search=shree');
     expect(res.body.data.map((c) => c.companyName)).toEqual(['Shree Ganesh Pharma Pvt Ltd']);
   });
 
@@ -152,7 +172,7 @@ describe('Parts', () => {
     const res = await admin.post(`/api/parts/${part.id}/restock`, { quantity: 5, note: 'PO-123' });
     expect(res.status).toBe(200);
     expect(res.body.stockQty).toBe(part.stockQty + 5);
-    const movement = await prisma.stockMovement.findFirst({ where: { partId: part.id, reason: 'RESTOCK' } });
+    const movement = await prisma.stockMovement.findFirst({ where: { partId: part.id, reason: 'RESTOCK' }, orderBy: { id: 'desc' } });
     expect(movement.change).toBe(5);
   });
 

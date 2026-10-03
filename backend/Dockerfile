@@ -1,6 +1,7 @@
-# Backend API image (used by docker-compose with PostgreSQL)
-FROM node:22-slim
-RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+# Backend API image (used by docker-compose with PostgreSQL).
+# The full (non-slim) Node image already contains OpenSSL, which Prisma needs,
+# so no extra packages have to be installed.
+FROM node:22-bookworm
 WORKDIR /app
 
 COPY package*.json ./

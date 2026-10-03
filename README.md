@@ -61,7 +61,8 @@ docker compose up --build
 | API docs (Swagger) | http://localhost:4000/api/docs |
 | ML service docs | http://localhost:8000/docs |
 
-The first start creates the tables and loads the demo data. To reset the demo data later:
+The first build downloads about 1.5 GB of base images and takes several minutes; later starts take seconds.
+The first start creates the tables and loads the demo data; restarting never wipes data you entered. To reset the demo data later:
 `docker compose exec backend node prisma/seed.js`.
 
 ### Option B: run the three parts locally (no Docker)
